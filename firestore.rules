@@ -1,0 +1,105 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required) - The user's unique identifier.
+    //   - email: string (required, email format) - The user's email address.
+    //   - displayName: string (optional) - The user's display name.
+    //   - photoURL: string (optional, URL format) - The user's profile photo URL.
+    //   - createdAt: timestamp (optional) - When the user was created.
+    //   - role: string (optional) - 'admin' or 'user'.
+    //
+    // Collection: products
+    // Document ID: {productId}
+    // Fields:
+    //   - id: string (required) - The product ID.
+    //   - title: string (required) - The product title.
+    //   - downloadUrl: string (required) - The link to the digital product.
+    //   - emailSubject: string (optional) - The subject of the delivery email.
+    //   - emailBody: string (optional) - The body of the delivery email.
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "alexcollection36@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'lastLogin', 'role']);
+    }
+
+    function isRoleUnchanged() {
+      return !('role' in request.resource.data) || 
+             !('role' in resource.data) || 
+             request.resource.data.role == resource.data.role;
+    }
+
+    function isCreatedAtUnchanged() {
+      return !('createdAt' in request.resource.data) || 
+             !('createdAt' in resource.data) || 
+             request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['id', 'title', 'downloadUrl']) &&
+             data.keys().hasOnly(['id', 'title', 'downloadUrl', 'downloadUrl2', 'emailSubject', 'emailBody']) &&
+             data.id is string && data.id.size() > 0 &&
+             data.title is string && data.title.size() > 0 &&
+             data.downloadUrl is string && data.downloadUrl.size() > 0 &&
+             (!('downloadUrl2' in data) || data.downloadUrl2 is string) &&
+             (!('emailSubject' in data) || data.emailSubject is string) &&
+             (!('emailBody' in data) || data.emailBody is string);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || !('role' in request.resource.data) || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && isRoleUnchanged() && isCreatedAtUnchanged() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true; // Publicly readable for the app to fetch titles/prices
+      allow write: if isAdmin() && isValidProduct(request.resource.data) && request.resource.data.id == productId;
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

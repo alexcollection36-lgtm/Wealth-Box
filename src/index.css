@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Montserrat", sans-serif;
+  --color-neon-purple: #7B5CFF;
+  --color-electric-violet: #8F00FF;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-black text-white font-sans antialiased selection:bg-neon-purple/30 selection:text-white;
+  }
+}
+
+@layer utilities {
+  .glow-purple {
+    box-shadow: 0 0 20px rgba(123, 92, 255, 0.3);
+  }
+  .glow-purple-strong {
+    box-shadow: 0 0 40px rgba(123, 92, 255, 0.5);
+  }
+  .glow-purple-subtle {
+    box-shadow: 0 0 15px rgba(123, 92, 255, 0.15);
+  }
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-lg border border-white/10;
+  }
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-neon-purple to-blue-400;
+  }
+}
+
+/* Custom grid background */
+.grid-bg {
+  background-image: 
+    linear-gradient(to right, rgba(123, 92, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(123, 92, 255, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
