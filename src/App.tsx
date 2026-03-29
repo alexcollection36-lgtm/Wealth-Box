@@ -486,6 +486,9 @@ const ProductShowcase = () => {
       if (!response.ok) {
         const text = await response.text();
         console.error('Error response text:', text);
+        console.error('Response Status:', response.status);
+        console.error('Response Headers:', Object.fromEntries(response.headers.entries()));
+        
         let errorData = {};
         try {
           errorData = JSON.parse(text);
@@ -502,7 +505,10 @@ const ProductShowcase = () => {
       } catch (e) {
         console.error('Failed to parse success JSON:', e);
         console.error('Full response text:', text);
-        throw new Error(`Invalid JSON response from server: ${text.substring(0, 100)}...`);
+        console.error('Response Status:', response.status);
+        console.error('Response Headers:', Object.fromEntries(response.headers.entries()));
+        
+        throw new Error(`Invalid JSON response from server (Status ${response.status}). The server returned HTML instead of JSON. This often happens if the request is redirected or if the API route is not found.`);
       }
 
       if (session.error) {

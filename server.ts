@@ -53,6 +53,11 @@ async function startServer() {
     const origin = req.headers.origin;
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} from ${origin || 'no-origin'}`);
     
+    // Log headers for debugging
+    if (req.path.startsWith('/api/')) {
+      console.log(`- Headers:`, JSON.stringify(req.headers));
+    }
+
     // Allow all origins for debugging, but set specifically if present
     res.header("Access-Control-Allow-Origin", origin || "*");
     res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
@@ -71,14 +76,22 @@ async function startServer() {
   // API Route: Health Check
   app.get("/api/health", (req, res) => {
     console.log(`[${new Date().toISOString()}] Health check request`);
-    console.log(`- Origin: ${req.headers.origin || 'unknown'}`);
-    console.log(`- User-Agent: ${req.headers['user-agent']}`);
-    console.log(`- Referer: ${req.headers.referer || 'none'}`);
     res.json({ 
       status: "ok", 
       timestamp: new Date().toISOString(), 
       origin: req.headers.origin,
-      env: process.env.NODE_ENV
+      env: process.env.NODE_ENV,
+      stripeKeySet: !!process.env.STRIPE_SECRET_KEY,
+      stripeKeyValid: process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_')
+    });
+  });
+
+  // API Route: Create Stripe Checkout Session (GET handler for debugging)
+  app.get("/api/create-checkout-session", (req, res) => {
+    console.log(`[${new Date().toISOString()}] GET /api/create-checkout-session (Invalid Method)`);
+    res.status(405).json({ 
+      error: "Method Not Allowed. Please use POST to create a checkout session.",
+      hint: "If you see this, your POST request was likely redirected to a GET request by a proxy or middleware."
     });
   });
 
@@ -239,8 +252,16 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    
+    // IMPORTANT: Only serve index.html for non-API routes
+    // This prevents API 404s from returning HTML
+    app.get(/^(?!\/api).*/, (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
+    });
+    
+    // Explicit 404 for missing API routes
+    app.all("/api/*", (req, res) => {
+      res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
     });
   }
 
