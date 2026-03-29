@@ -382,14 +382,13 @@ const BackendStatus = () => {
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const apiUrl = import.meta.env.VITE_API_URL || '';
+  const apiUrl = ''; // Use relative path to leverage Netlify/Dev proxy
   
   useEffect(() => {
     const checkStatus = async () => {
       setStatus('checking');
       try {
-        const response = await fetch(`${apiUrl}/api/health`, {
-          mode: 'cors',
+        const response = await fetch(`/api/health`, {
           cache: 'no-cache'
         });
         if (response.ok) {
@@ -431,7 +430,7 @@ const BackendStatus = () => {
             Retry
           </button>
           <a 
-            href={`${apiUrl}/api/health`} 
+            href={`/api/health`} 
             target="_blank" 
             rel="noopener noreferrer"
             className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
@@ -465,8 +464,7 @@ const ProductShowcase = () => {
     setNotification(null);
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || '';
-      const endpoint = `${apiUrl}/api/create-checkout-session`;
+      const endpoint = `/api/create-checkout-session`;
       
       console.log('Initiating purchase for:', product.title, 'at', endpoint);
       
