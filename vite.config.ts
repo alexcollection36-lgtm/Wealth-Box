@@ -7,7 +7,7 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react(), tailwindcss()],
-    base: '/Wealth-Box/',
+    base: '/',
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'import.meta.env.VITE_API_URL': JSON.stringify(mode === 'production' ? 'https://ais-dev-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app' : ''),
