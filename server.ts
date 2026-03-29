@@ -51,6 +51,8 @@ async function startServer() {
   // Manual CORS implementation for maximum reliability
   app.use((req, res, next) => {
     const origin = req.headers.origin;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} from ${origin || 'no-origin'}`);
+    
     // Allow all origins for debugging, but set specifically if present
     res.header("Access-Control-Allow-Origin", origin || "*");
     res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
@@ -59,6 +61,7 @@ async function startServer() {
     
     // Handle OPTIONS preflight
     if (req.method === 'OPTIONS') {
+      console.log(`- Handling OPTIONS preflight`);
       return res.status(200).end();
     }
     next();
@@ -81,6 +84,8 @@ async function startServer() {
 
   // API Route: Create Stripe Checkout Session
   app.post("/api/create-checkout-session", async (req, res) => {
+    console.log(`[${new Date().toISOString()}] POST /api/create-checkout-session`);
+    console.log(`- Body:`, JSON.stringify(req.body));
     try {
       const stripe = getStripe();
       const { productId, title, price, image, email, userId } = req.body;

@@ -484,11 +484,26 @@ const ProductShowcase = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server responded with ${response.status}: ${response.statusText}`);
+        const text = await response.text();
+        console.error('Error response text:', text);
+        let errorData = {};
+        try {
+          errorData = JSON.parse(text);
+        } catch (e) {
+          console.error('Failed to parse error JSON:', e);
+        }
+        throw new Error((errorData as any).error || `Server responded with ${response.status}: ${text.substring(0, 100)}...`);
       }
 
-      const session = await response.json();
+      const text = await response.text();
+      let session;
+      try {
+        session = JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse success JSON:', e);
+        console.error('Full response text:', text);
+        throw new Error(`Invalid JSON response from server: ${text.substring(0, 100)}...`);
+      }
 
       if (session.error) {
         throw new Error(session.error);
