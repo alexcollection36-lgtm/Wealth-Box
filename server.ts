@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import Stripe from "stripe";
@@ -47,6 +48,15 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(cors({
+    origin: [
+      "https://alexcollection36-lgtm.github.io",
+      "https://ais-dev-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app",
+      "https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app",
+      "http://localhost:3000"
+    ],
+    credentials: true
+  }));
   app.use(express.json());
 
   // API Route: Create Stripe Checkout Session

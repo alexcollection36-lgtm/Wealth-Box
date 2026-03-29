@@ -399,7 +399,8 @@ const ProductShowcase = () => {
     setNotification(null);
     
     try {
-      const response = await fetch('/api/create-checkout-session', {
+      const apiUrl = (import.meta as any).env.VITE_API_URL || '';
+      const response = await fetch(`${apiUrl}/api/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
