@@ -380,29 +380,48 @@ const FeatureHighlight = () => {
 
 const BackendStatus = () => {
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [error, setError] = useState<string | null>(null);
   const apiUrl = import.meta.env.VITE_API_URL || '';
   
   useEffect(() => {
     const checkStatus = async () => {
       try {
         const response = await fetch(`${apiUrl}/api/health`);
-        if (response.ok) setStatus('online');
-        else setStatus('offline');
-      } catch (e) {
+        if (response.ok) {
+          setStatus('online');
+          setError(null);
+        } else {
+          setStatus('offline');
+          setError(`Server responded with status: ${response.status}`);
+        }
+      } catch (e: any) {
         console.error('Backend connection failed to:', apiUrl, e);
         setStatus('offline');
+        setError(e.message || 'Connection failed');
       }
     };
     checkStatus();
   }, [apiUrl]);
 
   return (
-    <div 
-      title={`Connecting to: ${apiUrl || 'local'}`}
-      className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest text-white/50 cursor-help"
-    >
-      <div className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : status === 'offline' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 animate-pulse'}`} />
-      Backend: {status}
+    <div className="flex items-center gap-2">
+      <div 
+        title={`Connecting to: ${apiUrl || 'local'}${error ? ` - Error: ${error}` : ''}`}
+        className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest text-white/50 cursor-help"
+      >
+        <div className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : status === 'offline' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 animate-pulse'}`} />
+        Backend: {status}
+      </div>
+      {status === 'offline' && (
+        <a 
+          href={`${apiUrl}/api/health`} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
+        >
+          Test URL
+        </a>
+      )}
     </div>
   );
 };
