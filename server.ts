@@ -50,6 +50,7 @@ async function startServer() {
 
   app.use(cors({
     origin: (origin, callback) => {
+      console.log(`[${new Date().toISOString()}] CORS check for origin: ${origin || 'no-origin'}`);
       const allowedOrigins = [
         "https://alexcollection36-lgtm.github.io",
         "https://wealth-box.com",
@@ -64,6 +65,7 @@ async function startServer() {
       if (!origin || allowedOrigins.includes(origin) || origin.endsWith(".netlify.app")) {
         callback(null, true);
       } else {
+        console.warn(`[${new Date().toISOString()}] CORS blocked origin: ${origin}`);
         callback(new Error("Not allowed by CORS"));
       }
     },
@@ -73,7 +75,10 @@ async function startServer() {
 
   // API Route: Health Check
   app.get("/api/health", (req, res) => {
-    console.log(`[${new Date().toISOString()}] Health check request from origin: ${req.headers.origin || 'unknown'}`);
+    console.log(`[${new Date().toISOString()}] Health check request`);
+    console.log(`- Origin: ${req.headers.origin || 'unknown'}`);
+    console.log(`- User-Agent: ${req.headers['user-agent']}`);
+    console.log(`- Referer: ${req.headers.referer || 'none'}`);
     res.json({ 
       status: "ok", 
       timestamp: new Date().toISOString(), 

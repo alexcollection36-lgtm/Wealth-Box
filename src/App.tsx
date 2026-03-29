@@ -381,27 +381,37 @@ const FeatureHighlight = () => {
 const BackendStatus = () => {
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const apiUrl = import.meta.env.VITE_API_URL || '';
   
   useEffect(() => {
     const checkStatus = async () => {
+      setStatus('checking');
       try {
-        const response = await fetch(`${apiUrl}/api/health`);
+        const response = await fetch(`${apiUrl}/api/health`, {
+          mode: 'cors',
+          cache: 'no-cache'
+        });
         if (response.ok) {
           setStatus('online');
           setError(null);
         } else {
           setStatus('offline');
-          setError(`Server responded with status: ${response.status}`);
+          setError(`HTTP ${response.status}: ${response.statusText}`);
         }
       } catch (e: any) {
         console.error('Backend connection failed to:', apiUrl, e);
         setStatus('offline');
-        setError(e.message || 'Connection failed');
+        // Check if it's a CORS error (usually TypeError: Failed to fetch)
+        if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
+          setError('CORS or Network Error (Check if backend is running and Shared)');
+        } else {
+          setError(e.message || 'Connection failed');
+        }
       }
     };
     checkStatus();
-  }, [apiUrl]);
+  }, [apiUrl, retryCount]);
 
   return (
     <div className="flex items-center gap-2">
@@ -413,14 +423,22 @@ const BackendStatus = () => {
         Backend: {status}
       </div>
       {status === 'offline' && (
-        <a 
-          href={`${apiUrl}/api/health`} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
-        >
-          Test URL
-        </a>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setRetryCount(prev => prev + 1)}
+            className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
+          >
+            Retry
+          </button>
+          <a 
+            href={`${apiUrl}/api/health`} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
+          >
+            Test URL
+          </a>
+        </div>
       )}
     </div>
   );
