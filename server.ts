@@ -48,72 +48,69 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
-
-  // Global Request Logger
+  // 1. Global Middleware
+  app.use(cors({
+    origin: true,
+    credentials: true
+  }));
+  
+  // Use raw body for webhook, json for others
   app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${req.method} ${req.url} (Path: ${req.path}) from ${origin || 'no-origin'}`);
-    
-    if (req.path.startsWith('/api/')) {
-      console.log(`- Headers:`, JSON.stringify(req.headers));
-      if (req.method === 'POST') {
-        console.log(`- Body Keys:`, Object.keys(req.body || {}));
-      }
+    if (req.originalUrl === "/api/webhook") {
+      next();
+    } else {
+      express.json()(req, res, next);
     }
+  });
 
-    // CORS Headers
-    res.header("Access-Control-Allow-Origin", origin || "*");
-    res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-    res.header("Access-Control-Allow-Credentials", "true");
-    
-    if (req.method === 'OPTIONS') {
-      return res.status(200).end();
+  // Request Logger
+  app.use((req, res, next) => {
+    const timestamp = new Date().toISOString();
+    if (req.path.startsWith('/api/')) {
+      console.log(`[${timestamp}] ${req.method} ${req.url}`);
     }
     next();
   });
 
-  // API Route: Health Check
-  app.get(["/api/health", "/api/health/"], (req, res) => {
-    console.log(`[${new Date().toISOString()}] Health check success`);
+  // 2. API Routes
+  const apiRouter = express.Router();
+
+  // Health Check
+  apiRouter.get(["/health", "/health/"], (req, res) => {
     res.json({ 
       status: "ok", 
-      timestamp: new Date().toISOString(), 
-      origin: req.headers.origin,
-      env: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
       stripeKeySet: !!process.env.STRIPE_SECRET_KEY,
       stripeKeyValid: process.env.STRIPE_SECRET_KEY && (process.env.STRIPE_SECRET_KEY.startsWith('sk_') || process.env.STRIPE_SECRET_KEY.startsWith('rk_'))
     });
   });
 
-  // API Route: Create Stripe Checkout Session (GET handler for debugging)
-  app.get(["/api/create-checkout-session", "/api/create-checkout-session/"], (req, res) => {
-    console.log(`[${new Date().toISOString()}] GET /api/create-checkout-session (Invalid Method)`);
-    res.status(405).json({ 
-      error: "Method Not Allowed. Please use POST to create a checkout session.",
-      hint: "If you see this, your POST request was likely redirected to a GET request by a proxy or middleware."
-    });
+  // Create Checkout Session
+  apiRouter.get(["/create-checkout-session", "/create-checkout-session/"], (req, res) => {
+    res.status(405).json({ error: "Method Not Allowed. Please use POST." });
   });
 
-  // API Route: Create Stripe Checkout Session
-  app.post(["/api/create-checkout-session", "/api/create-checkout-session/"], async (req, res) => {
+  apiRouter.post(["/create-checkout-session", "/create-checkout-session/"], async (req, res) => {
     console.log(`[${new Date().toISOString()}] POST /api/create-checkout-session - START`);
     try {
       const stripe = getStripe();
       const { productId, title, price, image, email, userId } = req.body;
 
-      console.log(`- Params: product=${productId}, email=${email}, userId=${userId}`);
+      console.log(`- Params: product=${productId}, email=${email}, userId=${userId}, price=${price}`);
 
       if (!productId || !title || !price || !email || !userId) {
-        console.error("- Missing required fields");
         return res.status(400).json({ error: "Missing required fields: productId, title, price, email, or userId." });
       }
 
-      const unitAmount = Math.round(parseFloat(price.replace("$", "")) * 100);
-      const baseUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
+      // Robust price parsing
+      let numericPrice = typeof price === 'number' ? price : parseFloat(String(price).replace(/[^0-9.]/g, ''));
+      if (isNaN(numericPrice)) {
+        return res.status(400).json({ error: `Invalid price format: ${price}` });
+      }
+      const unitAmount = Math.round(numericPrice * 100);
 
+      const baseUrl = process.env.APP_URL || (req.headers.origin as string) || "https://wealth-box.com";
+      
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         customer_creation: "always",
@@ -125,7 +122,7 @@ async function startServer() {
               currency: "usd",
               product_data: {
                 name: title,
-                images: [image],
+                images: image ? [image] : [],
                 description: `Digital download for ${title}. Will be sent to your email after purchase.`,
               },
               unit_amount: unitAmount,
@@ -144,118 +141,102 @@ async function startServer() {
         },
       });
 
+      console.log(`- Session created: ${session.id}`);
       res.json({ id: session.id, url: session.url });
     } catch (error: any) {
-      console.error("Stripe Error:", error);
-      res.status(500).json({ error: error.message });
+      console.error("Stripe Session Error:", error);
+      res.status(500).json({ error: error.message || "Failed to create checkout session." });
     }
   });
 
-  // API Route: Stripe Webhook (Simulated)
-  // In production, you'd use stripe.webhooks.constructEvent with your endpoint secret
-  app.post("/api/webhook", async (req, res) => {
+  // Stripe Webhook
+  apiRouter.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    let event;
+
     try {
-      const event = req.body;
+      if (webhookSecret && sig) {
+        const stripe = getStripe();
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      } else {
+        // Fallback for testing without secret
+        event = JSON.parse(req.body.toString());
+      }
+    } catch (err: any) {
+      console.error(`Webhook Error: ${err.message}`);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
 
-      // Handle the checkout.session.completed event
-      if (event.type === "checkout.session.completed") {
-        const session = event.data.object;
-        // Prioritize email from metadata (account email) over Stripe's customer_details
-        const customerEmail = session.metadata?.customerEmail || session.customer_details?.email;
-        const customerName = session.customer_details?.name || "Valued Customer";
-        const productId = session.metadata?.productId;
-        const productTitle = session.metadata?.productTitle;
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      console.log(`--- PAYMENT SUCCESSFUL: ${session.id} ---`);
+      
+      const { productId, productTitle, customerEmail, userId } = session.metadata;
+      const actualEmail = customerEmail || session.customer_details?.email || session.customer_email;
 
-        console.log(`--- PAYMENT SUCCESSFUL ---`);
-        console.log(`Product: ${productTitle} (${productId})`);
-        console.log(`Customer: ${customerName} (${customerEmail})`);
-
-        if (productId && customerEmail) {
+      if (productId && actualEmail) {
+        try {
           let productData: any = null;
 
-          // 1. Try to fetch product configuration from Firestore
+          // 1. Try Firestore
           try {
             const productDoc = await db.collection("products").doc(productId).get();
             if (productDoc.exists) {
               productData = productDoc.data();
-              console.log(`Product data fetched from Firestore for ID: ${productId}`);
             }
-          } catch (error: any) {
-            console.warn(`Firestore fetch failed for ID: ${productId}: ${error.message}. Falling back to hardcoded data.`);
-          }
+          } catch (e) {}
 
-          // 2. Fallback to hardcoded data if Firestore fetch failed or product not found
+          // 2. Fallback Hardcoded
           if (!productData && HARDCODED_PRODUCTS[productId]) {
             productData = HARDCODED_PRODUCTS[productId];
-            console.log(`Using hardcoded fallback for product ID: ${productId}`);
           }
 
           if (productData) {
-            const downloadUrl = productData.downloadUrl || "Link not configured yet. Please contact support.";
-            const downloadUrl2 = productData.downloadUrl2 || "";
-            const emailSubject = productData.emailSubject || `Your download: ${productTitle}`;
-            let emailBody = productData.emailBody || `Thanks for your purchase! Here is your link: {{DOWNLOAD_URL}}`;
-
-            // 3. Replace placeholders
+            const downloadUrl = productData.downloadUrl || "https://wealth-box.com/download";
+            const emailSubject = productData.emailSubject || `Your purchase: ${productTitle || 'WealthBox Product'}`;
+            let emailBody = productData.emailBody || `Thanks for your purchase! Download here: {{DOWNLOAD_URL}}`;
+            
             emailBody = emailBody.replace("{{DOWNLOAD_URL}}", downloadUrl);
-            emailBody = emailBody.replace("{{DOWNLOAD_URL_2}}", downloadUrl2);
 
-            // 4. Send Email
             if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
               const transporter = nodemailer.createTransport({
                 service: process.env.EMAIL_SERVICE || "gmail",
-                auth: {
-                  user: process.env.EMAIL_USER,
-                  pass: process.env.EMAIL_PASS,
-                },
+                auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
               });
 
               await transporter.sendMail({
-                from: `"Digital Product Store" <${process.env.EMAIL_USER}>`,
-                to: customerEmail,
+                from: `"WealthBox" <${process.env.EMAIL_USER}>`,
+                to: actualEmail,
                 subject: emailSubject,
                 text: emailBody,
-                html: emailBody.replace(/\n/g, "<br>"), // Basic text to HTML conversion
+                html: emailBody.replace(/\n/g, "<br>"),
               });
-
-              console.log(`Email sent successfully to ${customerEmail}`);
+              console.log(`Email sent to ${actualEmail}`);
             } else {
-              console.warn("Email credentials not configured. Skipping email sending.");
-              console.log("Simulated Email Content:");
-              console.log(`Subject: ${emailSubject}`);
-              console.log(`Body: ${emailBody}`);
+              console.log("Email not configured. Content:", emailBody);
             }
-          } else {
-            console.error(`Product configuration not found for ID: ${productId} (Firestore and Hardcoded)`);
           }
+        } catch (e) {
+          console.error("Error processing fulfillment:", e);
         }
-        console.log(`---------------------------`);
-        
-        return res.json({ 
-          received: true, 
-          action: productId && customerEmail ? "Processing delivery" : "Missing metadata",
-          productId,
-          customerEmail
-        });
       }
-
-      res.json({ received: true });
-    } catch (error: any) {
-      console.error("Webhook Error:", error);
-      res.status(500).json({ error: error.message });
     }
+
+    res.json({ received: true });
   });
 
-  // API 404 Handler (Catch-all for /api/* that didn't match above)
-  app.all("/api/*", (req, res) => {
-    console.warn(`[API 404] ${req.method} ${req.path} - No route matched`);
-    res.status(404).json({ 
-      error: `API route not found: ${req.method} ${req.path}`,
-      hint: "Check if the path and method are correct. Routes are case-sensitive and trailing slashes may matter."
-    });
+  // API 404 Handler
+  apiRouter.all("*", (req, res) => {
+    console.warn(`[API 404] ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
   });
 
-  // Vite middleware for development
+  // Mount API Router
+  app.use("/api", apiRouter);
+
+  // 3. Static Files & SPA Fallback
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -266,8 +247,8 @@ async function startServer() {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     
-    // IMPORTANT: Only serve index.html for non-API routes
-    app.get(/^(?!\/api).*/, (req, res) => {
+    // Serve index.html for any non-API route
+    app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

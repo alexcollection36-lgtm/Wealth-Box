@@ -378,17 +378,29 @@ const FeatureHighlight = () => {
   );
 };
 
+// Absolute backend URL for the Shared App
+const BACKEND_URL = 'https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
+
+const getApiUrl = (path: string) => {
+  // If we're on the direct run.app URL or localhost, use relative paths
+  if (window.location.hostname === 'localhost' || window.location.hostname.includes('run.app')) {
+    return path;
+  }
+  // If we're on a custom domain (like wealth-box.com), use the absolute backend URL
+  return `${BACKEND_URL}${path}`;
+};
+
 const BackendStatus = () => {
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const apiUrl = ''; // Use relative path to leverage Netlify/Dev proxy
+  const apiUrl = getApiUrl('/api/health');
   
   useEffect(() => {
     const checkStatus = async () => {
       setStatus('checking');
       try {
-        const response = await fetch(`/api/health`, {
+        const response = await fetch(apiUrl, {
           cache: 'no-cache'
         });
         if (response.ok) {
@@ -396,17 +408,12 @@ const BackendStatus = () => {
           setError(null);
         } else {
           setStatus('offline');
-          setError(`HTTP ${response.status}: ${response.statusText}`);
+          setError(`HTTP ${response.status}`);
         }
       } catch (e: any) {
         console.error('Backend connection failed to:', apiUrl, e);
         setStatus('offline');
-        // Check if it's a CORS error (usually TypeError: Failed to fetch)
-        if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
-          setError('CORS or Network Error (Check if backend is running and Shared)');
-        } else {
-          setError(e.message || 'Connection failed');
-        }
+        setError('Connection failed');
       }
     };
     checkStatus();
@@ -421,24 +428,24 @@ const BackendStatus = () => {
         <div className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : status === 'offline' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 animate-pulse'}`} />
         Backend: {status}
       </div>
-      {status === 'offline' && (
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setRetryCount(prev => prev + 1)}
-            className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
-          >
-            Retry
-          </button>
-          <a 
-            href={`/api/health`} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
-          >
-            Test URL
-          </a>
-        </div>
-      )}
+        {status === 'offline' && (
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setRetryCount(prev => prev + 1)}
+              className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
+            >
+              Retry
+            </button>
+            <a 
+              href={getApiUrl('/api/health')} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
+            >
+              Test URL
+            </a>
+          </div>
+        )}
     </div>
   );
 };
@@ -464,7 +471,7 @@ const ProductShowcase = () => {
     setNotification(null);
     
     try {
-      const endpoint = `/api/create-checkout-session`;
+      const endpoint = getApiUrl('/api/create-checkout-session');
       
       console.log('Initiating purchase for:', product.title, 'at', endpoint);
       
