@@ -48,8 +48,21 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Simplified CORS for maximum compatibility
-  app.use(cors());
+  // Manual CORS implementation for maximum reliability
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    // Allow all origins for debugging, but set specifically if present
+    res.header("Access-Control-Allow-Origin", origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header("Access-Control-Allow-Credentials", "true");
+    
+    // Handle OPTIONS preflight
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    next();
+  });
   app.use(express.json());
 
   // API Route: Health Check
