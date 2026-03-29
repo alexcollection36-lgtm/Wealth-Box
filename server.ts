@@ -48,46 +48,48 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Manual CORS implementation for maximum reliability
+  app.use(express.json());
+
+  // Global Request Logger
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} from ${origin || 'no-origin'}`);
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${req.method} ${req.url} (Path: ${req.path}) from ${origin || 'no-origin'}`);
     
-    // Log headers for debugging
     if (req.path.startsWith('/api/')) {
       console.log(`- Headers:`, JSON.stringify(req.headers));
+      if (req.method === 'POST') {
+        console.log(`- Body Keys:`, Object.keys(req.body || {}));
+      }
     }
 
-    // Allow all origins for debugging, but set specifically if present
+    // CORS Headers
     res.header("Access-Control-Allow-Origin", origin || "*");
     res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
     res.header("Access-Control-Allow-Credentials", "true");
     
-    // Handle OPTIONS preflight
     if (req.method === 'OPTIONS') {
-      console.log(`- Handling OPTIONS preflight`);
       return res.status(200).end();
     }
     next();
   });
-  app.use(express.json());
 
   // API Route: Health Check
-  app.get("/api/health", (req, res) => {
-    console.log(`[${new Date().toISOString()}] Health check request`);
+  app.get(["/api/health", "/api/health/"], (req, res) => {
+    console.log(`[${new Date().toISOString()}] Health check success`);
     res.json({ 
       status: "ok", 
       timestamp: new Date().toISOString(), 
       origin: req.headers.origin,
       env: process.env.NODE_ENV,
       stripeKeySet: !!process.env.STRIPE_SECRET_KEY,
-      stripeKeyValid: process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_')
+      stripeKeyValid: process.env.STRIPE_SECRET_KEY && (process.env.STRIPE_SECRET_KEY.startsWith('sk_') || process.env.STRIPE_SECRET_KEY.startsWith('rk_'))
     });
   });
 
   // API Route: Create Stripe Checkout Session (GET handler for debugging)
-  app.get("/api/create-checkout-session", (req, res) => {
+  app.get(["/api/create-checkout-session", "/api/create-checkout-session/"], (req, res) => {
     console.log(`[${new Date().toISOString()}] GET /api/create-checkout-session (Invalid Method)`);
     res.status(405).json({ 
       error: "Method Not Allowed. Please use POST to create a checkout session.",
@@ -96,14 +98,16 @@ async function startServer() {
   });
 
   // API Route: Create Stripe Checkout Session
-  app.post("/api/create-checkout-session", async (req, res) => {
-    console.log(`[${new Date().toISOString()}] POST /api/create-checkout-session`);
-    console.log(`- Body:`, JSON.stringify(req.body));
+  app.post(["/api/create-checkout-session", "/api/create-checkout-session/"], async (req, res) => {
+    console.log(`[${new Date().toISOString()}] POST /api/create-checkout-session - START`);
     try {
       const stripe = getStripe();
       const { productId, title, price, image, email, userId } = req.body;
 
+      console.log(`- Params: product=${productId}, email=${email}, userId=${userId}`);
+
       if (!productId || !title || !price || !email || !userId) {
+        console.error("- Missing required fields");
         return res.status(400).json({ error: "Missing required fields: productId, title, price, email, or userId." });
       }
 
@@ -242,6 +246,15 @@ async function startServer() {
     }
   });
 
+  // API 404 Handler (Catch-all for /api/* that didn't match above)
+  app.all("/api/*", (req, res) => {
+    console.warn(`[API 404] ${req.method} ${req.path} - No route matched`);
+    res.status(404).json({ 
+      error: `API route not found: ${req.method} ${req.path}`,
+      hint: "Check if the path and method are correct. Routes are case-sensitive and trailing slashes may matter."
+    });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -254,14 +267,8 @@ async function startServer() {
     app.use(express.static(distPath));
     
     // IMPORTANT: Only serve index.html for non-API routes
-    // This prevents API 404s from returning HTML
     app.get(/^(?!\/api).*/, (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
-    });
-    
-    // Explicit 404 for missing API routes
-    app.all("/api/*", (req, res) => {
-      res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
     });
   }
 
