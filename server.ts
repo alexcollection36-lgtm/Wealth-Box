@@ -48,29 +48,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(cors({
-    origin: (origin, callback) => {
-      console.log(`[${new Date().toISOString()}] CORS check for origin: ${origin || 'no-origin'}`);
-      const allowedOrigins = [
-        "https://alexcollection36-lgtm.github.io",
-        "https://wealth-box.com",
-        "https://www.wealth-box.com",
-        "http://wealth-box.com",
-        "http://www.wealth-box.com",
-        "https://ais-dev-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app",
-        "https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app",
-        "http://localhost:3000"
-      ];
-      
-      if (!origin || allowedOrigins.includes(origin) || origin.endsWith(".netlify.app")) {
-        callback(null, true);
-      } else {
-        console.warn(`[${new Date().toISOString()}] CORS blocked origin: ${origin}`);
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true
-  }));
+  // Simplified CORS for maximum compatibility
+  app.use(cors());
   app.use(express.json());
 
   // API Route: Health Check
