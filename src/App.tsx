@@ -378,6 +378,31 @@ const FeatureHighlight = () => {
   );
 };
 
+const BackendStatus = () => {
+  const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const response = await fetch(`${apiUrl}/api/health`);
+        if (response.ok) setStatus('online');
+        else setStatus('offline');
+      } catch (e) {
+        setStatus('offline');
+      }
+    };
+    checkStatus();
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest text-white/50">
+      <div className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : status === 'offline' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 animate-pulse'}`} />
+      Backend: {status}
+    </div>
+  );
+};
+
 const ProductShowcase = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
@@ -399,8 +424,12 @@ const ProductShowcase = () => {
     setNotification(null);
     
     try {
-      const apiUrl = (import.meta as any).env.VITE_API_URL || '';
-      const response = await fetch(`${apiUrl}/api/create-checkout-session`, {
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const endpoint = `${apiUrl}/api/create-checkout-session`;
+      
+      console.log('Initiating purchase for:', product.title, 'at', endpoint);
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -414,6 +443,11 @@ const ProductShowcase = () => {
           userId: auth.currentUser?.uid,
         }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server responded with ${response.status}: ${response.statusText}`);
+      }
 
       const session = await response.json();
 
@@ -441,7 +475,13 @@ const ProductShowcase = () => {
       }
     } catch (error: any) {
       console.error('Payment Error:', error);
-      setNotification({ type: 'error', message: error.message || 'Something went wrong with the payment.' });
+      let errorMessage = error.message || 'Something went wrong with the payment.';
+      
+      if (errorMessage.includes('Failed to fetch')) {
+        errorMessage = `Could not connect to the payment server. This usually means the backend is offline or blocked by CORS. (Target: ${import.meta.env.VITE_API_URL || 'local'})`;
+      }
+      
+      setNotification({ type: 'error', message: errorMessage });
     } finally {
       setPaymentLoading(null);
     }
@@ -532,6 +572,14 @@ const ProductShowcase = () => {
                   >
                     Click here to open checkout
                   </a>
+                )}
+                {notification.type === 'error' && notification.message.includes('connect to the payment server') && (
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="mt-2 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-xs font-bold transition-colors"
+                  >
+                    Retry Connection
+                  </button>
                 )}
               </div>
               <button onClick={() => setNotification(null)} className="p-1 hover:bg-white/5 rounded-lg transition-colors shrink-0">
@@ -808,7 +856,10 @@ const Footer = () => {
           </div>
         </div>
         <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-600">
-          <p>© 2026 WealthBox. All rights reserved.</p>
+          <div className="flex flex-col gap-2">
+            <p>© 2026 WealthBox. All rights reserved.</p>
+            <BackendStatus />
+          </div>
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4" />
