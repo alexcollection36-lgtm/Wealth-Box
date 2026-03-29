@@ -380,23 +380,27 @@ const FeatureHighlight = () => {
 
 const BackendStatus = () => {
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const apiUrl = import.meta.env.VITE_API_URL || '';
   
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || '';
         const response = await fetch(`${apiUrl}/api/health`);
         if (response.ok) setStatus('online');
         else setStatus('offline');
       } catch (e) {
+        console.error('Backend connection failed to:', apiUrl, e);
         setStatus('offline');
       }
     };
     checkStatus();
-  }, []);
+  }, [apiUrl]);
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest text-white/50">
+    <div 
+      title={`Connecting to: ${apiUrl || 'local'}`}
+      className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest text-white/50 cursor-help"
+    >
       <div className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : status === 'offline' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 animate-pulse'}`} />
       Backend: {status}
     </div>

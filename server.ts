@@ -53,6 +53,8 @@ async function startServer() {
       "https://alexcollection36-lgtm.github.io",
       "https://wealth-box.com",
       "https://www.wealth-box.com",
+      "http://wealth-box.com",
+      "http://www.wealth-box.com",
       "https://ais-dev-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app",
       "https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app",
       "http://localhost:3000"
