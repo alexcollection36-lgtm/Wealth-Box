@@ -379,17 +379,18 @@ const FeatureHighlight = () => {
 };
 
 // Absolute backend URL for the Shared App
-const BACKEND_URL = 'https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
+const BACKEND_URL = 'https://ais-dev-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
 
 const getApiUrl = (path: string) => {
-  // If we are on a custom domain, we should try to use the hardcoded BACKEND_URL
-  // as a fallback if the same-origin request fails, but for now let's try to be smart.
-  // If the current origin is NOT the shared app URL, we might be on a custom domain.
-  if (window.location.hostname === 'wealth-box.com' || window.location.hostname === 'www.wealth-box.com') {
+  // If we are on a custom domain or the shared preview URL, 
+  // we should use the direct development backend URL where the server is actually running.
+  if (window.location.hostname === 'wealth-box.com' || 
+      window.location.hostname === 'www.wealth-box.com' ||
+      window.location.hostname.includes('ais-pre-')) {
     return `${BACKEND_URL}${path}`;
   }
   
-  // Default to same-origin
+  // Default to same-origin (works when viewing directly on ais-dev)
   return `${window.location.origin}${path}`;
 };
 
