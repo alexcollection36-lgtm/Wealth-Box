@@ -382,15 +382,19 @@ const FeatureHighlight = () => {
 const BACKEND_URL = 'https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
 
 const getApiUrl = (path: string) => {
+  let url;
   // If we are on a custom domain, we should use the absolute Shared App URL
   // because the custom domain might have routing issues or be served by a static host.
   if (window.location.hostname === 'wealth-box.com' || 
       window.location.hostname === 'www.wealth-box.com') {
-    return `${BACKEND_URL}${path}`;
+    url = `${BACKEND_URL}${path}`;
+  } else {
+    // For run.app domains or localhost, same-origin is fine.
+    url = `${window.location.origin}${path}`;
   }
   
-  // For run.app domains or localhost, same-origin is fine.
-  return `${window.location.origin}${path}`;
+  console.log(`[API] Routing ${path} to ${url}`);
+  return url;
 };
 
 const BackendStatus = () => {
@@ -457,24 +461,14 @@ const BackendStatus = () => {
         <div className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : status === 'offline' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 animate-pulse'}`} />
         Backend: {status}
       </div>
-        {status === 'offline' && (
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setRetryCount(prev => prev + 1)}
-              className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
-            >
-              Retry
-            </button>
-            <a 
-              href={getApiUrl('/api/health')} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[8px] uppercase tracking-widest text-white/30 hover:text-white/70 transition-colors"
-            >
-              Test URL
-            </a>
-          </div>
-        )}
+      {status === 'offline' && (
+        <button 
+          onClick={() => setRetryCount(prev => prev + 1)}
+          className="text-[10px] uppercase tracking-widest text-white hover:text-green-400 transition-colors underline underline-offset-2"
+        >
+          Retry
+        </button>
+      )}
     </div>
   );
 };

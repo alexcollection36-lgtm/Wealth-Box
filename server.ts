@@ -58,25 +58,8 @@ async function startServer() {
   const PORT = 3000;
 
   // 1. Global Middleware
-  const allowedOrigins = [
-    "https://wealth-box.com",
-    "https://www.wealth-box.com",
-    "https://ais-dev-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app",
-    "https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app"
-  ];
-
   app.use(cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) !== -1 || origin.includes("run.app")) {
-        callback(null, true);
-      } else {
-        // For development/launch, let's be permissive but log it
-        console.log(`[CORS] Request from origin: ${origin}`);
-        callback(null, true);
-      }
-    },
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     credentials: true
@@ -94,9 +77,7 @@ async function startServer() {
   // Request Logger
   app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
-    if (req.path.startsWith('/api/')) {
-      console.log(`[${timestamp}] ${req.method} ${req.url}`);
-    }
+    console.log(`[${timestamp}] ${req.method} ${req.originalUrl} - Origin: ${req.headers.origin || 'none'}`);
     next();
   });
 
