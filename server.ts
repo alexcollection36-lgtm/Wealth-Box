@@ -269,8 +269,15 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`[${new Date().toISOString()}] Server running on http://localhost:${PORT}`);
+    console.log(`- Environment: ${process.env.NODE_ENV || "development"}`);
+    console.log(`- Stripe Secret Key: ${process.env.STRIPE_SECRET_KEY ? "Set" : "NOT SET"}`);
+    console.log(`- App URL: ${process.env.APP_URL || "NOT SET (will use request origin)"}`);
+  }).on('error', (err: any) => {
+    console.error(`[${new Date().toISOString()}] Server failed to start:`, err);
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error(`[${new Date().toISOString()}] Fatal error starting server:`, err);
+});

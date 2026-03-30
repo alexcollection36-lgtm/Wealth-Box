@@ -378,18 +378,19 @@ const FeatureHighlight = () => {
   );
 };
 
-// Absolute backend URL for the Shared App
+// Absolute backend URL for the Shared App (Fallback)
 const BACKEND_URL = 'https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
 
 const getApiUrl = (path: string) => {
-  // If we are on a custom domain, we must use the absolute Shared App URL
-  if (window.location.hostname === 'wealth-box.com' || 
+  // Prefer same-origin. If wealth-box.com points to the app, this will work.
+  // If we are on a different domain (like a static host), we fallback to the absolute URL.
+  if (window.location.hostname.includes('run.app') || 
+      window.location.hostname === 'wealth-box.com' || 
       window.location.hostname === 'www.wealth-box.com') {
-    return `${BACKEND_URL}${path}`;
+    return `${window.location.origin}${path}`;
   }
   
-  // Default to same-origin (works when viewing directly on ais-dev or ais-pre)
-  return `${window.location.origin}${path}`;
+  return `${BACKEND_URL}${path}`;
 };
 
 const BackendStatus = () => {
@@ -402,6 +403,7 @@ const BackendStatus = () => {
     const checkStatus = async () => {
       setStatus('checking');
       try {
+        // Try primary URL first
         const response = await fetch(apiUrl, {
           cache: 'no-cache',
           mode: 'cors'
@@ -409,12 +411,30 @@ const BackendStatus = () => {
         if (response.ok) {
           setStatus('online');
           setError(null);
-        } else {
-          setStatus('offline');
-          setError(`HTTP ${response.status}`);
+          return;
         }
+        throw new Error(`HTTP ${response.status}`);
       } catch (e: any) {
-        console.error('Backend connection failed to:', apiUrl, e);
+        console.warn('Primary backend check failed, trying fallback...', e);
+        
+        // Fallback to absolute URL if primary fails and we aren't already using it
+        const fallbackUrl = `${BACKEND_URL}/api/health`;
+        if (apiUrl !== fallbackUrl) {
+          try {
+            const fallbackResponse = await fetch(fallbackUrl, {
+              cache: 'no-cache',
+              mode: 'cors'
+            });
+            if (fallbackResponse.ok) {
+              setStatus('online');
+              setError(null);
+              return;
+            }
+          } catch (fallbackErr) {
+            console.error('Fallback backend check also failed:', fallbackErr);
+          }
+        }
+        
         setStatus('offline');
         setError(`Connection failed to ${apiUrl}`);
       }
@@ -475,23 +495,47 @@ const ProductShowcase = () => {
     
     try {
       const endpoint = getApiUrl('/api/create-checkout-session');
-      
       console.log('Initiating purchase for:', product.title, 'at', endpoint);
       
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          productId: product.id,
-          title: product.title,
-          price: product.price,
-          image: product.image,
-          email: auth.currentUser?.email,
-          userId: auth.currentUser?.uid,
-        }),
-      });
+      let response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            productId: product.id,
+            title: product.title,
+            price: product.price,
+            image: product.image,
+            email: auth.currentUser?.email,
+            userId: auth.currentUser?.uid,
+          }),
+        });
+      } catch (e: any) {
+        console.warn('Primary checkout session creation failed, trying fallback...', e);
+        
+        const fallbackUrl = `${BACKEND_URL}/api/create-checkout-session`;
+        if (endpoint !== fallbackUrl) {
+          response = await fetch(fallbackUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              productId: product.id,
+              title: product.title,
+              price: product.price,
+              image: product.image,
+              email: auth.currentUser?.email,
+              userId: auth.currentUser?.uid,
+            }),
+          });
+        } else {
+          throw e;
+        }
+      }
 
       if (!response.ok) {
         const text = await response.text();
