@@ -382,12 +382,15 @@ const FeatureHighlight = () => {
 const BACKEND_URL = 'https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
 
 const getApiUrl = (path: string) => {
-  // If we're on the direct run.app URL or localhost, use relative paths
-  if (window.location.hostname === 'localhost' || window.location.hostname.includes('run.app')) {
-    return path;
+  // If we are on a custom domain, we should try to use the hardcoded BACKEND_URL
+  // as a fallback if the same-origin request fails, but for now let's try to be smart.
+  // If the current origin is NOT the shared app URL, we might be on a custom domain.
+  if (window.location.hostname === 'wealth-box.com' || window.location.hostname === 'www.wealth-box.com') {
+    return `${BACKEND_URL}${path}`;
   }
-  // If we're on a custom domain (like wealth-box.com), use the absolute backend URL
-  return `${BACKEND_URL}${path}`;
+  
+  // Default to same-origin
+  return `${window.location.origin}${path}`;
 };
 
 const BackendStatus = () => {
@@ -545,7 +548,8 @@ const ProductShowcase = () => {
       let errorMessage = error.message || 'Something went wrong with the payment.';
       
       if (errorMessage.includes('Failed to fetch')) {
-        errorMessage = `Could not connect to the payment server. This usually means the backend is offline or blocked by CORS. (Target: ${import.meta.env.VITE_API_URL || 'local'})`;
+        const targetUrl = getApiUrl('/api/create-checkout-session');
+        errorMessage = `Could not connect to the payment server. This usually means the backend is offline or blocked by CORS. (Target: ${targetUrl})`;
       }
       
       setNotification({ type: 'error', message: errorMessage });

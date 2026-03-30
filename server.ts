@@ -50,8 +50,9 @@ async function startServer() {
 
   // 1. Global Middleware
   app.use(cors({
-    origin: true,
-    credentials: true
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
   }));
   
   // Use raw body for webhook, json for others
