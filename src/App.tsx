@@ -382,15 +382,15 @@ const FeatureHighlight = () => {
 const BACKEND_URL = 'https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
 
 const getApiUrl = (path: string) => {
-  // Prefer same-origin. If wealth-box.com points to the app, this will work.
-  // If we are on a different domain (like a static host), we fallback to the absolute URL.
-  if (window.location.hostname.includes('run.app') || 
-      window.location.hostname === 'wealth-box.com' || 
+  // If we are on a custom domain, we should use the absolute Shared App URL
+  // because the custom domain might have routing issues or be served by a static host.
+  if (window.location.hostname === 'wealth-box.com' || 
       window.location.hostname === 'www.wealth-box.com') {
-    return `${window.location.origin}${path}`;
+    return `${BACKEND_URL}${path}`;
   }
   
-  return `${BACKEND_URL}${path}`;
+  // For run.app domains or localhost, same-origin is fine.
+  return `${window.location.origin}${path}`;
 };
 
 const BackendStatus = () => {
@@ -408,10 +408,16 @@ const BackendStatus = () => {
           cache: 'no-cache',
           mode: 'cors'
         });
+        
         if (response.ok) {
-          setStatus('online');
-          setError(null);
-          return;
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            setStatus('online');
+            setError(null);
+            return;
+          } else {
+            throw new Error('Response is not JSON (received HTML)');
+          }
         }
         throw new Error(`HTTP ${response.status}`);
       } catch (e: any) {
@@ -498,8 +504,8 @@ const ProductShowcase = () => {
       console.log('Initiating purchase for:', product.title, 'at', endpoint);
       
       let response;
-      try {
-        response = await fetch(endpoint, {
+      const makeRequest = async (url: string) => {
+        const res = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -513,43 +519,32 @@ const ProductShowcase = () => {
             userId: auth.currentUser?.uid,
           }),
         });
+        
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Server error (${res.status}): ${text.substring(0, 100)}`);
+        }
+        
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Server returned HTML instead of JSON. This often happens on custom domains.');
+        }
+        
+        return res.json();
+      };
+
+      let session;
+      try {
+        session = await makeRequest(endpoint);
       } catch (e: any) {
         console.warn('Primary checkout session creation failed, trying fallback...', e);
-        
         const fallbackUrl = `${BACKEND_URL}/api/create-checkout-session`;
         if (endpoint !== fallbackUrl) {
-          response = await fetch(fallbackUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              productId: product.id,
-              title: product.title,
-              price: product.price,
-              image: product.image,
-              email: auth.currentUser?.email,
-              userId: auth.currentUser?.uid,
-            }),
-          });
+          session = await makeRequest(fallbackUrl);
         } else {
           throw e;
         }
       }
-
-      if (!response.ok) {
-        const text = await response.text();
-        console.error('Error response text:', text);
-        console.error('Response Status:', response.status);
-        
-        let errorData = {};
-        try {
-          errorData = JSON.parse(text);
-        } catch (e) {}
-        throw new Error((errorData as any).error || `Server error (${response.status}). Please try again.`);
-      }
-
-      const session = await response.json();
 
       if (session.error) {
         throw new Error(session.error);

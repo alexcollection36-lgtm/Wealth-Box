@@ -58,10 +58,28 @@ async function startServer() {
   const PORT = 3000;
 
   // 1. Global Middleware
+  const allowedOrigins = [
+    "https://wealth-box.com",
+    "https://www.wealth-box.com",
+    "https://ais-dev-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app",
+    "https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app"
+  ];
+
   app.use(cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) !== -1 || origin.includes("run.app")) {
+        callback(null, true);
+      } else {
+        // For development/launch, let's be permissive but log it
+        console.log(`[CORS] Request from origin: ${origin}`);
+        callback(null, true);
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    credentials: true
   }));
   
   // Use raw body for webhook, json for others
