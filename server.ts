@@ -7,14 +7,23 @@ import dotenv from "dotenv";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import nodemailer from "nodemailer";
-import firebaseConfig from "./firebase-applet-config.json" with { type: "json" };
+import fs from "fs";
 
 dotenv.config();
 
+// Load Firebase Config safely
+const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+
 // Initialize Firebase Admin
-admin.initializeApp({
-  projectId: firebaseConfig.projectId,
-});
+try {
+  admin.initializeApp({
+    projectId: firebaseConfig.projectId,
+  });
+  console.log("Firebase Admin initialized successfully");
+} catch (error) {
+  console.error("Firebase Admin initialization failed:", error);
+}
 
 const db = getFirestore(admin.app());
 
@@ -75,6 +84,11 @@ async function startServer() {
 
   // 2. API Routes
   const apiRouter = express.Router();
+
+  // Root Health Check (outside /api)
+  app.get("/health", (req, res) => {
+    res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });
+  });
 
   // Health Check
   apiRouter.get(["/health", "/health/"], (req, res) => {

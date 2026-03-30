@@ -379,18 +379,16 @@ const FeatureHighlight = () => {
 };
 
 // Absolute backend URL for the Shared App
-const BACKEND_URL = 'https://ais-dev-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
+const BACKEND_URL = 'https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
 
 const getApiUrl = (path: string) => {
-  // If we are on a custom domain or the shared preview URL, 
-  // we should use the direct development backend URL where the server is actually running.
+  // If we are on a custom domain, we must use the absolute Shared App URL
   if (window.location.hostname === 'wealth-box.com' || 
-      window.location.hostname === 'www.wealth-box.com' ||
-      window.location.hostname.includes('ais-pre-')) {
+      window.location.hostname === 'www.wealth-box.com') {
     return `${BACKEND_URL}${path}`;
   }
   
-  // Default to same-origin (works when viewing directly on ais-dev)
+  // Default to same-origin (works when viewing directly on ais-dev or ais-pre)
   return `${window.location.origin}${path}`;
 };
 
@@ -405,7 +403,8 @@ const BackendStatus = () => {
       setStatus('checking');
       try {
         const response = await fetch(apiUrl, {
-          cache: 'no-cache'
+          cache: 'no-cache',
+          mode: 'cors'
         });
         if (response.ok) {
           setStatus('online');
@@ -417,7 +416,7 @@ const BackendStatus = () => {
       } catch (e: any) {
         console.error('Backend connection failed to:', apiUrl, e);
         setStatus('offline');
-        setError('Connection failed');
+        setError(`Connection failed to ${apiUrl}`);
       }
     };
     checkStatus();
