@@ -491,7 +491,7 @@ const ProductShowcase = () => {
     }
 
     setPaymentLoading(product.id);
-    setNotification(null);
+    setNotification({ type: 'success', message: 'Preparing secure checkout...' });
     
     try {
       const endpoint = getApiUrl('/api/create-checkout-session');
@@ -541,59 +541,50 @@ const ProductShowcase = () => {
         const text = await response.text();
         console.error('Error response text:', text);
         console.error('Response Status:', response.status);
-        console.error('Response Headers:', Object.fromEntries(response.headers.entries()));
         
         let errorData = {};
         try {
           errorData = JSON.parse(text);
-        } catch (e) {
-          console.error('Failed to parse error JSON:', e);
-        }
-        throw new Error((errorData as any).error || `Server responded with ${response.status}: ${text.substring(0, 100)}...`);
+        } catch (e) {}
+        throw new Error((errorData as any).error || `Server error (${response.status}). Please try again.`);
       }
 
-      const text = await response.text();
-      let session;
-      try {
-        session = JSON.parse(text);
-      } catch (e) {
-        console.error('Failed to parse success JSON:', e);
-        console.error('Full response text:', text);
-        console.error('Response Status:', response.status);
-        console.error('Response Headers:', Object.fromEntries(response.headers.entries()));
-        
-        throw new Error(`Invalid JSON response from server (Status ${response.status}). The server returned HTML instead of JSON. This often happens if the request is redirected or if the API route is not found.`);
-      }
+      const session = await response.json();
 
       if (session.error) {
         throw new Error(session.error);
       }
 
-      // Stripe Checkout cannot be rendered in an iframe.
-      // We must open it in a new tab.
       if (session.url) {
-        const checkoutWindow = window.open(session.url, '_blank');
+        const isIframe = window.self !== window.top;
         
-        if (!checkoutWindow || checkoutWindow.closed || typeof checkoutWindow.closed === 'undefined') {
-          // Popup was blocked
-          setNotification({ 
-            type: 'error', 
-            message: 'Popup blocked! Please allow popups or click here to complete payment.',
-            url: session.url 
-          });
+        if (isIframe) {
+          // In AI Studio iframe, we MUST use window.open
+          const checkoutWindow = window.open(session.url, '_blank');
+          
+          if (!checkoutWindow || checkoutWindow.closed || typeof checkoutWindow.closed === 'undefined') {
+            setNotification({ 
+              type: 'error', 
+              message: 'Popup blocked! Please allow popups or click the button below to pay.',
+              url: session.url 
+            });
+          } else {
+            setNotification({ type: 'success', message: 'Redirecting to Stripe...' });
+          }
         } else {
-          setNotification({ type: 'success', message: 'Opening secure checkout in a new tab...' });
+          // On custom domain, redirect directly to avoid popup blockers
+          setNotification({ type: 'success', message: 'Redirecting to secure checkout...' });
+          window.location.href = session.url;
         }
       } else {
-        throw new Error('Failed to create checkout session URL');
+        throw new Error('No checkout URL received from server.');
       }
     } catch (error: any) {
       console.error('Payment Error:', error);
       let errorMessage = error.message || 'Something went wrong with the payment.';
       
       if (errorMessage.includes('Failed to fetch')) {
-        const targetUrl = getApiUrl('/api/create-checkout-session');
-        errorMessage = `Could not connect to the payment server. This usually means the backend is offline or blocked by CORS. (Target: ${targetUrl})`;
+        errorMessage = 'Could not connect to the payment server. Please check your internet or try again in a moment.';
       }
       
       setNotification({ type: 'error', message: errorMessage });
