@@ -59,7 +59,7 @@ async function startServer() {
 
   // 1. Global Middleware
   app.use(cors({
-    origin: "*",
+    origin: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     credentials: true
@@ -77,7 +77,7 @@ async function startServer() {
   // Request Logger
   app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${req.method} ${req.originalUrl} - Origin: ${req.headers.origin || 'none'}`);
+    console.log(`[${timestamp}] ${req.method} ${req.originalUrl} - Origin: ${req.headers.origin || 'none'} - Host: ${req.headers.host}`);
     next();
   });
 

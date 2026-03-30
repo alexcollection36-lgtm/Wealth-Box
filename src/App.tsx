@@ -382,16 +382,9 @@ const FeatureHighlight = () => {
 const BACKEND_URL = 'https://ais-pre-fkiph533gzk4dlledcqsa6-617908309211.europe-west2.run.app';
 
 const getApiUrl = (path: string) => {
-  let url;
-  // If we are on a custom domain, we should use the absolute Shared App URL
-  // because the custom domain might have routing issues or be served by a static host.
-  if (window.location.hostname === 'wealth-box.com' || 
-      window.location.hostname === 'www.wealth-box.com') {
-    url = `${BACKEND_URL}${path}`;
-  } else {
-    // For run.app domains or localhost, same-origin is fine.
-    url = `${window.location.origin}${path}`;
-  }
+  // Always try same-origin first, as the backend is serving the frontend.
+  // This is the most reliable way to avoid CORS and routing issues.
+  const url = `${window.location.origin}${path}`;
   
   console.log(`[API] Routing ${path} to ${url}`);
   return url;
@@ -410,7 +403,8 @@ const BackendStatus = () => {
         // Try primary URL first
         const response = await fetch(apiUrl, {
           cache: 'no-cache',
-          mode: 'cors'
+          mode: 'cors',
+          credentials: 'include'
         });
         
         if (response.ok) {
@@ -420,10 +414,10 @@ const BackendStatus = () => {
             setError(null);
             return;
           } else {
-            throw new Error('Response is not JSON (received HTML)');
+            throw new Error(`Response is not JSON (received ${contentType || 'unknown'})`);
           }
         }
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       } catch (e: any) {
         console.warn('Primary backend check failed, trying fallback...', e);
         
@@ -433,20 +427,21 @@ const BackendStatus = () => {
           try {
             const fallbackResponse = await fetch(fallbackUrl, {
               cache: 'no-cache',
-              mode: 'cors'
+              mode: 'cors',
+              credentials: 'include'
             });
             if (fallbackResponse.ok) {
               setStatus('online');
               setError(null);
               return;
             }
-          } catch (fallbackErr) {
+          } catch (fallbackErr: any) {
             console.error('Fallback backend check also failed:', fallbackErr);
           }
         }
         
         setStatus('offline');
-        setError(`Connection failed to ${apiUrl}`);
+        setError(`Connection failed: ${e.message || 'Unknown error'}`);
       }
     };
     checkStatus();
@@ -504,6 +499,7 @@ const ProductShowcase = () => {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify({
             productId: product.id,
             title: product.title,
